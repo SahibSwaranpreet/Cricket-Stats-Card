@@ -371,35 +371,45 @@ async function go(){
 
   try {
     // Call Netlify serverless function
-    const res = await fetch("/.netlify/functions/stats", {
+    const API_KEY = "sk-ant-YOUR-KEY-HERE";
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({player: name, league})
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1200,
+        messages: [{ role: "user", content: prompt }]
+      })
     });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    if (!res.ok) throw new Error(data.error?.message || "API error " + res.status);
 
-    // Flatten stats object for renderCard
+    const text = data.content?.[0]?.text || "";
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Could not parse response");
+
+    const parsed = JSON.parse(match[0]);
     const flat = {
-      ...data,
-      runs:  data.stats?.runs,
-      avg:   data.stats?.avg,
-      sr:    data.stats?.sr,
-      hs:    data.stats?.hs,
-      h:     data.stats?.h,
-      f:     data.stats?.f,
-      wkts:  data.stats?.wkts,
-      be:    data.stats?.be,
-      eco:   data.stats?.eco,
-      mat:   data.stats?.mat,
+      ...parsed,
+      runs: parsed.stats?.runs, avg: parsed.stats?.avg, sr: parsed.stats?.sr,
+      hs: parsed.stats?.hs, h: parsed.stats?.h, f: parsed.stats?.f,
+      wkts: parsed.stats?.wkts, be: parsed.stats?.be,
+      eco: parsed.stats?.eco, mat: parsed.stats?.mat,
     };
     renderCard(name, flat);
 
   } catch(e) {
-    document.getElementById("err").innerHTML=`<div class="err">⚠ ${e.message || "Could not load stats. Check your API key in Netlify environment variables."}</div>`;
-    card.style.display="none";
+    document.getElementById("err").innerHTML =
+      `<div class="err">⚠ ${e.message}</div>`;
+    card.style.display = "none";
   }
 
   document.getElementById("gob").disabled=false;
